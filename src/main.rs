@@ -307,37 +307,37 @@ impl InitializedParsers {
 fn main() {
     let mut parsers = Parsers::NotInitializedYet;
 
-    let code = "fn main() {\n    let hi = \"hi\";\n    // TODO\n}\n\nconst SIGN_BIT: u32 = 0x8000_0000;\r\nconst ALL_BUT_SIGN_BIT: u32
- = 0x7fff_ffff;\r\n\r\n/// Assumes x is one of the \"usual\" `f32`s, AKA not sub/denormal, Infinity or NaN.\r\n/// So normal numbers or 0. This does not imply that the output is
-a usual f32.\r\npub fn usual_f32_minimal_increase(x: f32) -> f32 {\r\n    let non_sign_bits = x.to_bits() & ALL_BUT_SIGN_BIT;\r\n    // if is 0 or -0\r\n    if non_sign_bits == 0
- {\r\n        std::f32::MIN_POSITIVE\r\n    } else {\r\n        let sign_bit = x.to_bits() & SIGN_BIT;\r\n        let sign = if sign_bit == 0 { 1 } else { -1 };\r\n        f32::f
-rom_bits(sign_bit | (non_sign_bits as i32 + sign) as u32)\r\n    }\r\n}\r\n\r\n/// Assumes x is one of the \"usual\" `f32`s, AKA not sub/denormal, Infinity or NaN.\r\n/// So norm
-al numbers or 0. This does not imply that the output is a usual f32.\r\npub fn usual_f32_minimal_decrease(x: f32) -> f32 {\r\n    let non_sign_bits = x.to_bits() & ALL_BUT_SIGN_B
-IT;\r\n    // if is 0 or -0\r\n    if non_sign_bits == 0 {\r\n        -std::f32::MIN_POSITIVE\r\n    } else {\r\n        let sign_bit = x.to_bits() & SIGN_BIT;\r\n        let sig
-n = if sign_bit == 0 { 1 } else { -1 };\r\n        f32::from_bits(sign_bit | (non_sign_bits as i32 - sign) as u32)\r\n    }\r\n}\r\n\r\npub fn is_normal_or_0(x: f32) -> bool {\r\
-n    use std::num::FpCategory::{Normal, Zero};\r\n    let category = x.classify();\r\n    category == Zero || category == Normal\r\n}\r\n\r\n/// returns the next largest floating
- point number if the input is normal or 0\r\n/// and the ouput would be normal or 0. Otherwise, the input is returned.\r\npub fn next_largest_f32_if_normal_or_0(x: f32) -> f32 {\
-r\n    if is_normal_or_0(x) {\r\n        let larger = usual_f32_minimal_increase(x);\r\n        if is_normal_or_0(larger) {\r\n            return larger;\r\n        }\r\n    }\r\
-n    x\r\n}\r\n\r\n/// returns the next smallest floating point number if the input is normal or 0\r\n/// and the ouput would be normal or 0. Otherwise, the input is returned.\r\
-npub fn next_smallest_f32_if_normal_or_0(x: f32) -> f32 {\r\n    if is_normal_or_0(x) {\r\n        let smaller = usual_f32_minimal_decrease(x);\r\n        if is_normal_or_0(small
-er) {\r\n            return smaller;\r\n        }\r\n    }\r\n    x\r\n}\r\n\r\n#[cfg(test)]\r\nmod floating_point_tests {\r\n    use super::*;\r\n    use crate::tests::arb;\r\n
-   use proptest::proptest;\r\n    use std::f32::{MAX, MIN, MIN_POSITIVE};\r\n    use std::num::FpCategory::{Infinite, Normal, Zero};\r\n    // note, the following tests demostate
-s that prop testing is not the same thing as testing every\r\n    // case!\r\n    proptest! {\r\n        #[test]\r\n        fn usual_f32_minimal_increase_outputs_usual_f32s(\r\n
-           x in arb::usual(),\r\n        ) {\r\n            let category = usual_f32_minimal_increase(x).classify();\r\n            assert!(\r\n                category == Zero |
-| category == Normal,\r\n                \"category was {:?}, not Zero or Normal\",\r\n                category\r\n            );\r\n        }\r\n    }\r\n    proptest! {\r\n
-    #[test]\r\n        fn usual_f32_minimal_decrease_outputs_usual_f32s(\r\n            x in arb::usual(),\r\n        ) {\r\n            let category = usual_f32_minimal_decrease
-(x).classify();\r\n            assert!(\r\n                category == Zero || category == Normal,\r\n                \"category was {:?}, not Zero or Normal\",\r\n
-  category\r\n            );\r\n        }\r\n    }\r\n    proptest! {\r\n        #[test]\r\n        fn usual_f32_minimal_increase_increases(\r\n            old in arb::usual(),\r
-\n        ) {\r\n            let new = usual_f32_minimal_increase(old);\r\n            assert!(\r\n                new > old,\r\n                \"{:?} <= {:?}\\n{:b} <= {:b}\",\
-r\n                new,\r\n                old,\r\n                new.to_bits(),\r\n                old.to_bits()\r\n            );\r\n        }\r\n    }\r\n    proptest! {\r\n
-       #[test]\r\n        fn usual_f32_minimal_decrease_decreases(\r\n            old in arb::usual(),\r\n        ) {\r\n            let new = usual_f32_minimal_decrease(old);\r\
-n            assert!(\r\n                new < old,\r\n                \"{:?} >= {:?}\\n{:b} >= {:b}\",\r\n                new,\r\n                old,\r\n                new.to_
-bits(),\r\n                old.to_bits()\r\n            );\r\n        }\r\n    }\r\n    #[test]\r\n    fn how_usual_f32_minimal_decrease_works_at_the_edge() {\r\n        // preco
-ndition\r\n        assert_eq!(Normal, MIN.classify());\r\n        let category = usual_f32_minimal_decrease(MIN).classify();\r\n        assert_eq!(Infinite, category);\r\n    }\r
-\n    #[test]\r\n    fn how_usual_f32_minimal_increase_works_at_the_edge() {\r\n        // precondition\r\n        assert_eq!(Normal, MAX.classify());\r\n        let category = u
-sual_f32_minimal_increase(MAX).classify();\r\n        assert_eq!(Infinite, category);\r\n    }\r\n\r\n    #[test]\r\n    fn how_usual_f32_minimal_decrease_works_around_zero() {\r
-\n        assert_eq!(usual_f32_minimal_decrease(0.0), -MIN_POSITIVE);\r\n    }\r\n    #[test]\r\n    fn how_usual_f32_minimal_increase_works_around_zero() {\r\n        assert_eq!
-(usual_f32_minimal_increase(0.0), MIN_POSITIVE);\r\n    }\r\n}\r\n";
+    let code = "fn main() {\n    let hi = \"hi\";\n    // TODO\n}\n\nconst SIGN_BIT: u32 = 0x8000_0000;\nconst ALL_BUT_SIGN_BIT: u32
+ = 0x7fff_ffff;\n\n/// Assumes x is one of the \"usual\" `f32`s, AKA not sub/denormal, Infinity or NaN.\n/// So normal numbers or 0. This does not imply that the output is
+a usual f32.\npub fn usual_f32_minimal_increase(x: f32) -> f32 {\n    let non_sign_bits = x.to_bits() & ALL_BUT_SIGN_BIT;\n    // if is 0 or -0\n    if non_sign_bits == 0
+ {\n        std::f32::MIN_POSITIVE\n    } else {\n        let sign_bit = x.to_bits() & SIGN_BIT;\n        let sign = if sign_bit == 0 { 1 } else { -1 };\n        f32::f
+rom_bits(sign_bit | (non_sign_bits as i32 + sign) as u32)\n    }\n}\n\n/// Assumes x is one of the \"usual\" `f32`s, AKA not sub/denormal, Infinity or NaN.\n/// So norm
+al numbers or 0. This does not imply that the output is a usual f32.\npub fn usual_f32_minimal_decrease(x: f32) -> f32 {\n    let non_sign_bits = x.to_bits() & ALL_BUT_SIGN_B
+IT;\n    // if is 0 or -0\n    if non_sign_bits == 0 {\n        -std::f32::MIN_POSITIVE\n    } else {\n        let sign_bit = x.to_bits() & SIGN_BIT;\n        let sig
+n = if sign_bit == 0 { 1 } else { -1 };\n        f32::from_bits(sign_bit | (non_sign_bits as i32 - sign) as u32)\n    }\n}\n\npub fn is_normal_or_0(x: f32) -> bool {\
+n    use std::num::FpCategory::{Normal, Zero};\n    let category = x.classify();\n    category == Zero || category == Normal\n}\n\n/// returns the next largest floating
+ point number if the input is normal or 0\n/// and the ouput would be normal or 0. Otherwise, the input is returned.\npub fn next_largest_f32_if_normal_or_0(x: f32) -> f32 {\
+r\n    if is_normal_or_0(x) {\n        let larger = usual_f32_minimal_increase(x);\n        if is_normal_or_0(larger) {\n            return larger;\n        }\n    }\
+n    x\n}\n\n/// returns the next smallest floating point number if the input is normal or 0\n/// and the ouput would be normal or 0. Otherwise, the input is returned.\
+npub fn next_smallest_f32_if_normal_or_0(x: f32) -> f32 {\n    if is_normal_or_0(x) {\n        let smaller = usual_f32_minimal_decrease(x);\n        if is_normal_or_0(small
+er) {\n            return smaller;\n        }\n    }\n    x\n}\n\n#[cfg(test)]\nmod floating_point_tests {\n    use super::*;\n    use crate::tests::arb;\n
+   use proptest::proptest;\n    use std::f32::{MAX, MIN, MIN_POSITIVE};\n    use std::num::FpCategory::{Infinite, Normal, Zero};\n    // note, the following tests demostate
+s that prop testing is not the same thing as testing every\n    // case!\n    proptest! {\n        #[test]\n        fn usual_f32_minimal_increase_outputs_usual_f32s(\n
+           x in arb::usual(),\n        ) {\n            let category = usual_f32_minimal_increase(x).classify();\n            assert!(\n                category == Zero |
+| category == Normal,\n                \"category was {:?}, not Zero or Normal\",\n                category\n            );\n        }\n    }\n    proptest! {\n
+    #[test]\n        fn usual_f32_minimal_decrease_outputs_usual_f32s(\n            x in arb::usual(),\n        ) {\n            let category = usual_f32_minimal_decrease
+(x).classify();\n            assert!(\n                category == Zero || category == Normal,\n                \"category was {:?}, not Zero or Normal\",\n
+  category\n            );\n        }\n    }\n    proptest! {\n        #[test]\n        fn usual_f32_minimal_increase_increases(\n            old in arb::usual(),
+\n        ) {\n            let new = usual_f32_minimal_increase(old);\n            assert!(\n                new > old,\n                \"{:?} <= {:?}\\n{:b} <= {:b}\",\
+r\n                new,\n                old,\n                new.to_bits(),\n                old.to_bits()\n            );\n        }\n    }\n    proptest! {\n
+       #[test]\n        fn usual_f32_minimal_decrease_decreases(\n            old in arb::usual(),\n        ) {\n            let new = usual_f32_minimal_decrease(old);\
+n            assert!(\n                new < old,\n                \"{:?} >= {:?}\\n{:b} >= {:b}\",\n                new,\n                old,\n                new.to_
+bits(),\n                old.to_bits()\n            );\n        }\n    }\n    #[test]\n    fn how_usual_f32_minimal_decrease_works_at_the_edge() {\n        // preco
+ndition\n        assert_eq!(Normal, MIN.classify());\n        let category = usual_f32_minimal_decrease(MIN).classify();\n        assert_eq!(Infinite, category);\n    }
+\n    #[test]\n    fn how_usual_f32_minimal_increase_works_at_the_edge() {\n        // precondition\n        assert_eq!(Normal, MAX.classify());\n        let category = u
+sual_f32_minimal_increase(MAX).classify();\n        assert_eq!(Infinite, category);\n    }\n\n    #[test]\n    fn how_usual_f32_minimal_decrease_works_around_zero() {
+\n        assert_eq!(usual_f32_minimal_decrease(0.0), -MIN_POSITIVE);\n    }\n    #[test]\n    fn how_usual_f32_minimal_increase_works_around_zero() {\n        assert_eq!
+(usual_f32_minimal_increase(0.0), MIN_POSITIVE);\n    }\n}\n";
 
     dbg!(parsers.get_spans(code, ParserKind::Rust));
 }
