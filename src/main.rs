@@ -13,117 +13,59 @@ pub struct SpanView {
     pub kind: SpanKind,
 }
 
-#[derive(Clone, Copy, Debug)]
-pub enum ParserKind {
-    Plaintext,
-    Rust
-}
-
 pub struct InitializedParsers {
     rust: Parser,
     rust_tree: Option<Tree>,
     rust_comment_query: Query,
     rust_string_query: Query,
 }
-impl std::fmt::Debug for InitializedParsers {
-    fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
-        fmt.debug_struct("InitializedParsers")
-           .field("rust", &("TODO rust: Parser Debug".to_string()))
-           .field("rust_tree", &self.rust_tree)
-           .field("rust_comment_query", &self.rust_comment_query)
-           .field("rust_string_query", &self.rust_string_query)
-           .finish()
-    }
-}
-
-type Spans = Vec<SpanView>;
-
-/// How many times more common plain nodes are than the other typs of nodes.
-const PLAIN_NODES_RATIO: usize = 4;
 
 impl InitializedParsers {
-    fn get_spans(&mut self, to_parse: &str) -> Spans {
+    fn get_spans(&mut self, to_parse: &str) -> Vec<SpanView> {
         use SpanKind::*;
    
-        let SpanNodes {
-            comment_nodes,
-            string_nodes,
-        } = {
-            self.rust_tree = dbg!(self.rust.parse(to_parse, None));
-    
-            let mut comment_nodes = Vec::new();
-    
-            let mut string_nodes = Vec::new();
-    
-            if let Some(r_t) = &self.rust_tree {
-                let text_callback = move |n: Node| {
-                    let r = n.range();
-                    &to_parse[r.start_byte..r.end_byte]
-                };
-    
-                let mut query_cursor = QueryCursor::new();
-    
-                let (_, _): (Vec<_>, Vec<_>) = dbg!(
-                    query_cursor.matches(
-                        &self.rust_comment_query,
-                        r_t.root_node(),
-                        text_callback,
-                    ).map(|m: tree_sitter::QueryMatch| m.pattern_index).collect(),
-                    query_cursor.matches(
-                        &self.rust_string_query,
-                        r_t.root_node(),
-                        text_callback,
-                    ).map(|m: tree_sitter::QueryMatch| m.pattern_index).collect(),
-                );
-    
-                comment_nodes = query_cursor.matches(
-                    &self.rust_comment_query,
-                    r_t.root_node(),
-                    text_callback,
-                ).flat_map(|q_match| 
-                    q_match.captures.iter().map(|q_capture| &q_capture.node)
-                ).collect();
-    
-                string_nodes = query_cursor.matches(
-                    &self.rust_string_query,
-                    r_t.root_node(),
-                    text_callback,
-                ).flat_map(|q_match| {
-                    dbg!(q_match.pattern_index);
-                    q_match.captures.iter().map(|q_capture| &q_capture.node)
-                }).collect();
-    
-                dbg!(&string_nodes);
-            }
-            dbg!(&string_nodes);
-            SpanNodes {
-                comment_nodes,
-                string_nodes,
-            }
-        };
-        dbg!("SpanNodes");
+        self.rust_tree = dbg!(self.rust.parse(to_parse, None));
+
+        let mut comment_nodes = Vec::new();
+
+        let mut string_nodes = Vec::new();
+
+        let r_t = self.rust_tree.as_ref().unwrap();
+        {
+            let text_callback = move |n: Node| {
+                let r = n.range();
+                &to_parse[r.start_byte..r.end_byte]
+            };
+
+            let mut query_cursor = QueryCursor::new();
+
+            comment_nodes = query_cursor.matches(
+                &self.rust_comment_query,
+                r_t.root_node(),
+                text_callback,
+            ).flat_map(|q_match| 
+                q_match.captures.iter().map(|q_capture| &q_capture.node)
+            ).collect();
+
+            string_nodes = query_cursor.matches(
+                &self.rust_string_query,
+                r_t.root_node(),
+                text_callback,
+            ).flat_map(|q_match| {
+                dbg!(q_match.pattern_index);
+                q_match.captures.iter().map(|q_capture| &q_capture.node)
+            }).collect();
+        }
+
         let mut comment_nodes = comment_nodes.iter();
         let mut string_nodes = string_nodes.iter();
 
-
-        let mut spans = Vec::with_capacity(
-            (comment_nodes.len() + string_nodes.len())
-            * (PLAIN_NODES_RATIO + 1)
-        );
+        let mut spans = Vec::new();
 
         let mut comment = comment_nodes.next();
         let mut string = string_nodes.next();
         let mut previous_end_byte_index = 0;
         loop {
-            if let Some(s) = string.as_ref() {
-                dbg!("before s.kind_id()");
-                s.kind_id();
-                dbg!("after s.kind_id()");
-                println!("{{Node {} {} - {}}}", s.kind(), s.kind(), s.kind());
-                dbg!(s);
-            }
-            
-            //dbg!(&string, &comment);
             let (node, kind) = {
                 macro_rules! handle_previous_chunk {
                     ($node: ident) => {
@@ -178,21 +120,11 @@ impl InitializedParsers {
         }
 
         if previous_end_byte_index < to_parse.len() {
-            spans.push(plaintext_end_span_for(to_parse));
+            spans.push(SpanView { kind: SpanKind::Plain, end_byte_index: to_parse.len()});
         }
 
         spans
     }
-}
-
-#[derive(Debug)]
-struct SpanNodes<'tree> {
-    comment_nodes: Vec<&'tree Node<'tree>>,
-    string_nodes: Vec<&'tree Node<'tree>>,
-}
-
-fn plaintext_end_span_for(s: &str) -> SpanView {
-    SpanView { kind: SpanKind::Plain, end_byte_index: s.len()}
 }
 
 extern "C" { fn tree_sitter_rust() -> Language; }
